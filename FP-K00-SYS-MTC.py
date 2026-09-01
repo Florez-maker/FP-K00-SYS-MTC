@@ -9,15 +9,19 @@ import pathlib
 import matplotlib
 matplotlib.use("Agg")
 
-import numpy as np
-import pandas as pd
-
 import plotly.express as px
-import plotly.graph_objects as go
 from scipy.stats import gaussian_kde
-import streamlit as st
 from PIL import Image
 import unidecode
+
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.impute import SimpleImputer
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import r2_score
+import plotly.graph_objects as go
+import streamlit as st
 
 # ════════════════════════════════════════════════════
 # CONFIGURACIÓN GLOBAL
@@ -200,9 +204,6 @@ FOLIAR_ALIASES_RAW = {
 }
 
 DIMENSIONES_CORR = {
-    # ═══════════════════════════════════════════════════════════════════════
-    # 1. SUELO: REACCIÓN, SALINIDAD, ACIDEZ Y CIC
-    # ═══════════════════════════════════════════════════════════════════════
     "Suelo — Reacción, salinidad, acidez y CIC": [
         "ph",
         "cea",
@@ -217,9 +218,6 @@ DIMENSIONES_CORR = {
         "ras",
     ],
 
-    # ═══════════════════════════════════════════════════════════════════════
-    # 2. SUELO: BASES INTERCAMBIABLES Y MATERIA ORGÁNICA
-    # ═══════════════════════════════════════════════════════════════════════
     "Suelo — Bases intercambiables y materia orgánica": [
         "mo",
         "p",
@@ -238,9 +236,6 @@ DIMENSIONES_CORR = {
         "sat_bases",
     ],
 
-    # ═══════════════════════════════════════════════════════════════════════
-    # 3. SUELO: RELACIONES CATIÓNICAS
-    # ═══════════════════════════════════════════════════════════════════════
     "Suelo — Relaciones catiónicas": [
         "k_na",
         "mg_k",
@@ -254,9 +249,6 @@ DIMENSIONES_CORR = {
         "bases_ca_mg_k",
     ],
 
-    # ═══════════════════════════════════════════════════════════════════════
-    # 4. SUELO: SATURACIONES Y PARTICIPACIÓN EN CIC
-    # ═══════════════════════════════════════════════════════════════════════
     "Suelo — Saturaciones y porcentajes de CIC": [
         "sat_ca",
         "sat_mg",
@@ -269,9 +261,6 @@ DIMENSIONES_CORR = {
         "na_pct_cic",
     ],
 
-    # ═══════════════════════════════════════════════════════════════════════
-    # 5. SUELO: MICRONUTRIENTES
-    # ═══════════════════════════════════════════════════════════════════════
     "Suelo — Micronutrientes": [
         "b",
         "cu",
@@ -285,9 +274,6 @@ DIMENSIONES_CORR = {
         "micro_balance_cu_zn",
     ],
 
-    # ═══════════════════════════════════════════════════════════════════════
-    # 6. SUELO: TEXTURA
-    # ═══════════════════════════════════════════════════════════════════════
     "Suelo — Textura": [
         "a",
         "l",
@@ -296,9 +282,6 @@ DIMENSIONES_CORR = {
         "rel_arena_arcilla",
     ],
 
-    # ═══════════════════════════════════════════════════════════════════════
-    # 7. ÍNDICES AGRONÓMICOS DEL SUELO
-    # ═══════════════════════════════════════════════════════════════════════
     "Suelo — Índices agronómicos": [
         "indice_acidez",
         "indice_bases",
@@ -312,9 +295,6 @@ DIMENSIONES_CORR = {
         "rel_na_bases",
     ],
 
-    # ═══════════════════════════════════════════════════════════════════════
-    # 8. INVENTARIO, DENSIDAD Y ESTRUCTURA DEL CULTIVO
-    # ═══════════════════════════════════════════════════════════════════════
     "Manejo — Inventario y densidad": [
         "edad",
         "n_palmas",
@@ -1722,7 +1702,6 @@ def make_bar_table_pie(df_corr: pd.DataFrame, value_label: str):
         COLORS["danger"],
     )
 
-    # ── 1. Barras: coeficiente de correlación firmado ──
     bar = go.Figure()
 
     bar.add_trace(
@@ -1764,7 +1743,6 @@ def make_bar_table_pie(df_corr: pd.DataFrame, value_label: str):
         ),
     )
 
-    # ── 2. Tabla: correlación + pares válidos ──
     tabla = X.sort_values("Magnitud", ascending=False).copy()
 
     table = go.Figure(
@@ -1869,10 +1847,8 @@ def tab_resumen(df: pd.DataFrame):
         unsafe_allow_html=True,
     )
 
-    # Trabajar sobre copia y convertir correctamente las variables de DIMENSIONES_CORR
     df_work = _forzar_numericas_dimensiones(df)
 
-    # Resolver ton/ha sin depender de mayúsculas o formato del nombre
     prod_col = _resolver_columna(
         df_work.columns,
         [
@@ -1889,7 +1865,6 @@ def tab_resumen(df: pd.DataFrame):
     if prod_col is not None:
         df_work[prod_col] = _convertir_serie_numerica_suelo(df_work[prod_col])
 
-    # Recalcular; no reutilizar numeric_cols viejo de session_state
     numeric_cols = (
         df_work.select_dtypes(include=[np.number])
         .columns
@@ -1900,7 +1875,6 @@ def tab_resumen(df: pd.DataFrame):
         st.info("No se detectaron columnas numéricas para el análisis de correlación.")
         return
 
-    # DIMENSIONES_CORR resuelto contra nombres reales del dataframe
     grupos_cols = _grupos_dimensiones_reales(df_work)
     grupos_validos = list(grupos_cols.keys())
 
@@ -2043,14 +2017,6 @@ def tab_resumen(df: pd.DataFrame):
         key=sanitize_key("resumen_corr_heatmap"),
     )
 
-    st.download_button(
-        "⬇️ Descargar matriz de correlación (CSV)",
-        corr.round(3).to_csv().encode("utf-8"),
-        file_name="correlacion_resumen.csv",
-        mime="text/csv",
-        key=sanitize_key("dl_corr_resumen"),
-    )
-
     if prod_col is None or prod_col not in corr.columns:
         st.info(
             "No se detectó una columna de producción para calcular "
@@ -2132,17 +2098,8 @@ def tab_resumen(df: pd.DataFrame):
             key=sanitize_key("resumen_corr_pie"),
         )
 
-    st.download_button(
-        "⬇️ Descargar correlaciones con ton/ha (CSV)",
-        df_corr_ton.sort_values(
-            "Correlacion",
-            key=lambda s: s.abs(),
-            ascending=False,
-        ).to_csv(index=False).encode("utf-8"),
-        file_name="correlaciones_con_ton_ha.csv",
-        mime="text/csv",
-        key=sanitize_key("dl_corr_ton_ha"),
-    )
+    st.markdown("---")
+
 
 def tab_produccion(df: pd.DataFrame):
     st.markdown('<div class="section-title">Análisis Exploratorio de Distribución y Variabilidad de la Productividad</div>',
@@ -2182,7 +2139,8 @@ def tab_produccion(df: pd.DataFrame):
                 "AREA: %{customdata[1]:.1f} ha<br>"
             )
             fig_tree.update_traces(hovertemplate="%{label}<br>%{value:.2f}")
-            fig_tree.update_layout(height=320, template="plotly_white", margin=dict(t=10, l=0, r=0, b=0), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor = "rgba(0,0,0,0)")
+            fig_tree.update_layout(height=320, template="plotly_white", margin=dict(t=10, l=0, r=0, b=0),
+                                   paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
             st.plotly_chart(fig_tree, use_container_width=True, key="prod_treemap")
     st.markdown("---")
 
@@ -2312,24 +2270,6 @@ def tab_fertilizacion(df: pd.DataFrame, FERT_COLS):
 
     st.markdown("---")
 
-def tab_foliares(df: pd.DataFrame, FOLIAR_COLS):
-    st.markdown('<div class="section-title">Análisis Exploratorio de Distribución y Variabilidad de las variables Foliares</div>',
-                    unsafe_allow_html=True)
-    avail_fol = [c for c in FOLIAR_COLS if c in df.columns]
-    if not avail_fol:
-        st.info("No hay datos foliares en el dataset.")
-        return
-    c_sel1, c_sel2, c_sel3 = st.columns(3)
-    var_fol = c_sel1.selectbox("Variable foliar:", avail_fol, format_func=lambda x: x.replace("_f","").upper(), key="fol_var")
-    agrupar = c_sel2.selectbox("Agrupar por:", ["finca","departamento","lote","material"], key="fol_group")
-    c1, c2 = st.columns(2)
-    with c1:
-        fig = fig_boxplot(df, agrupar, var_fol, "", global_mean=df[var_fol].mean() if var_fol in df.columns else None)
-        st.plotly_chart(fig, use_container_width=True, key=sanitize_key(f"fol_box_{var_fol}"))
-    with c2:
-        fig2 = fig_distplot(df[var_fol], var_fol)
-        st.plotly_chart(fig2, use_container_width=True, key=sanitize_key(f"fol_dist_{var_fol}"))
-    st.markdown("---")
 
 def tab_clima(df: pd.DataFrame, CLIMA_COLS):
     st.markdown(
@@ -2687,52 +2627,293 @@ def tab_cuadrantes(df: pd.DataFrame):
         ),
     )
 
-def tab_modelo(df: pd.DataFrame, SUELO_COLS, FERT_COLS, FOLIAR_COLS):
-    st.markdown('<div class="section-title">Modelo Predictivo — Random Forest (ton/ha)</div>', unsafe_allow_html=True)
-    try:
-        from sklearn.ensemble import RandomForestRegressor
-        from sklearn.metrics import r2_score
-    except Exception:
-        st.error("scikit-learn no está instalado. Ejecuta pip install scikit-learn")
-        return
-    if "ton_ha" not in df.columns:
-        st.info("ton_ha requerido.")
-        return
-    feature_pool = (SUELO_COLS + FERT_COLS + FOLIAR_COLS + ["edad","densidad","area"])
-    features_avail = [c for c in feature_pool if c in df.columns]
-    c_opt1, c_opt2 = st.columns(2)
-    n_est = c_opt1.slider("Nº de árboles:", 50, 500, 150, 50, key="rf_nest")
-    min_feat = c_opt2.slider("% mínimo de datos por feature:", 10, 80, 30, key="rf_minfeat")
-    df_model = df[features_avail + ["ton_ha"]].dropna(subset=["ton_ha"])
-    df_model = df_model.select_dtypes(include=[np.number])
-    good_feats = [c for c in df_model.columns if c != "ton_ha" and df_model[c].notna().sum() >= len(df_model) * (min_feat/100)]
-    df_model = df_model[good_feats + ["ton_ha"]].dropna()
-    if len(df_model) < 50 or len(good_feats) < 3:
-        st.warning(f"Pocos datos ({len(df_model)} filas, {len(good_feats)} features).")
-        return
-    st.info(f"Entrenando con {len(df_model):,} registros y {len(good_feats)} variables.")
-    with st.spinner("Entrenando Random Forest..."):
-        X = df_model[good_feats].values
-        y = df_model["ton_ha"].values
-        rf = RandomForestRegressor(n_estimators=n_est, max_depth=8, min_samples_leaf=5, n_jobs=-1, random_state=42)
-        rf.fit(X, y)
-        y_pred = rf.predict(X)
-        r2 = r2_score(y, y_pred)
-        rmse = np.sqrt(np.mean((y - y_pred)**2))
-    ck1, ck2, ck3 = st.columns(3)
-    kpi_card(ck1, "R² (entrenamiento)", f"{r2:.3f}", "📈")
-    kpi_card(ck2, "RMSE (ton_ha)", f"{rmse:.3f}", "📉")
-    kpi_card(ck3, "Features usadas", str(len(good_feats)), "🔢")
     st.markdown("---")
-    st.markdown('<div class="section-title">⚡ Reglas condicionales — Top variables</div>', unsafe_allow_html=True)
-    imp_desc = pd.DataFrame({"variable": good_feats, "importancia": rf.feature_importances_}).sort_values("importancia",
-                                                                                                      ascending=False)
+
+
+def tab_foliares(df: pd.DataFrame, FOLIAR_COLS):
+    st.markdown('<div class="section-title">Análisis Exploratorio de Distribución y Variabilidad de las variables Foliares</div>',
+                    unsafe_allow_html=True)
+    avail_fol = [c for c in FOLIAR_COLS if c in df.columns]
+    if not avail_fol:
+        st.info("No hay datos foliares en el dataset.")
+        return
+
+    c_sel1, c_sel2, c_sel3 = st.columns(3)
+    var_fol = c_sel1.selectbox("Variable foliar:", avail_fol, format_func=lambda x: x.replace("_f","").upper(), key="fol_var")
+    agrupar = c_sel2.selectbox("Agrupar por:", ["finca","departamento","lote","material"], key="fol_group")
+
+    df_f = df.copy()
+    if agrupar in df_f.columns:
+        grupos_disp = df_f[agrupar].dropna().astype(str).unique().tolist()
+        if len(grupos_disp) > 8:
+            top_grupos = c_sel3.multiselect(f"Filtrar {agrupar} (vacío = todos):", grupos_disp, key="fol_filter")
+            if top_grupos:
+                df_f = df_f[df_f[agrupar].astype(str).isin(top_grupos)]
+
+    c1, c2 = st.columns(2)
+    with c1:
+        fig = fig_boxplot(df_f, agrupar, var_fol, "", global_mean=df_f[var_fol].mean() if var_fol in df_f.columns else None)
+        st.plotly_chart(fig, use_container_width=True, key=sanitize_key(f"fol_box_{var_fol}"))
+    with c2:
+        fig2 = fig_distplot(df_f[var_fol], var_fol)
+        st.plotly_chart(fig2, use_container_width=True, key=sanitize_key(f"fol_dist_{var_fol}"))
+
+    st.markdown("---")
+
+    st.markdown('<div class="section-title">🎻 Distribución por grupo — Violin + Box + puntos</div>', unsafe_allow_html=True)
+    df_v = df_f[[agrupar, var_fol]].dropna() if agrupar in df_f.columns else df_f[[var_fol]].dropna().copy()
+    if not df_v.empty and agrupar in df_v.columns:
+        df_v[agrupar] = df_v[agrupar].astype(str)
+        fig_v = px.violin(
+            df_v, x=agrupar, y=var_fol, box=True, points="all",
+            color=agrupar,
+            color_discrete_sequence=px.colors.qualitative.Set2,
+        )
+        fig_v.update_traces(meanline_visible=True)
+        fig_v.update_layout(
+            title=f"Densidad y cuartiles de {var_fol.replace('_f','').upper()} por {agrupar}",
+            xaxis_title=agrupar, yaxis_title=var_fol,
+            showlegend=False, height=480, template="plotly_white",
+        )
+        st.plotly_chart(fig_v, use_container_width=True, key="fol_violin")
+    else:
+        st.info("Sin datos suficientes para el violin.")
+
+    st.markdown('<div class="section-title">🎯 Perfil foliar por grupo vs rangos óptimos (Radar)</div>', unsafe_allow_html=True)
+
+    FOLIAR_REFERENCE = {
+        "N":   {"min": 2.50, "max": 2.90, "patrones": ["n_f", "nitrogeno_f", "n_foliar", "nitrogeno"]},
+        "P":   {"min": 0.15, "max": 0.18, "patrones": ["p_f", "fosforo_f", "p_foliar", "fosforo"]},
+        "K":   {"min": 1.00, "max": 1.40, "patrones": ["k_f", "potasio_f", "k_foliar", "potasio"]},
+        "Ca":  {"min": 0.50, "max": 0.70, "patrones": ["ca_f", "calcio_f", "ca_foliar", "calcio"]},
+        "Mg":  {"min": 0.25, "max": 0.35, "patrones": ["mg_f", "magnesio_f", "mg_foliar", "magnesio"]},
+        "S":   {"min": 0.25, "max": 0.30, "patrones": ["s_f", "azufre_f", "s_foliar", "azufre"]},
+        "B":   {"min": 18.0, "max": 25.0, "patrones": ["b_f", "boro_f", "b_foliar", "boro"]},
+        "Cu":  {"min": 5.0,  "max": 8.0,  "patrones": ["cu_f", "cobre_f", "cu_foliar", "cobre"]},
+        "Zn":  {"min": 15.0, "max": 25.0, "patrones": ["zn_f", "zinc_f", "zn_foliar", "zinc"]},
+        "Mn":  {"min": 25.0, "max": 60.0, "patrones": ["mn_f", "manganeso_f", "mn_foliar", "manganeso"]},
+        "Fe":  {"min": 50.0, "max": 100.0,"patrones": ["fe_f", "hierro_f", "fe_foliar", "hierro"]},
+    }
+
+    nutriente_col = {}
+    for nut, info in FOLIAR_REFERENCE.items():
+        matched = None
+        for c in avail_fol:
+            if c.lower() == f"{nut.lower()}_f":
+                matched = c
+                break
+        if matched is None:
+            for c in avail_fol:
+                for pat in info["patrones"]:
+                    if c.lower() == pat.lower():
+                        matched = c
+                        break
+                if matched:
+                    break
+        if matched:
+            nutriente_col[nut] = matched
+
+    if len(nutriente_col) < 3:
+        st.info(
+            f"Se necesitan al menos 3 nutrientes con datos para construir el radar. "
+            f"Detectados: {list(nutriente_col.keys()) or 'ninguno'}. "
+            f"Revisa que existan columnas tipo n_f, p_f, k_f, ... en FOLIAR_COLS."
+        )
+        st.markdown("---")
+        return
+
+    nut_cols = list(nutriente_col.values())
+    if agrupar not in df_f.columns:
+        st.info(f"Columna '{agrupar}' no encontrada en el dataset para el radar.")
+        st.markdown("---")
+        return
+
+    df_radar = df_f[[agrupar] + nut_cols].copy()
+    df_radar = df_radar.dropna(how="all", subset=nut_cols)
+    if df_radar.empty:
+        st.info("Sin datos suficientes para construir el radar.")
+        st.markdown("---")
+        return
+
+    grupos_radar = df_radar[agrupar].value_counts().head(5).index.tolist()
+    df_radar = df_radar[df_radar[agrupar].isin(grupos_radar)]
+    df_radar[agrupar] = df_radar[agrupar].astype(str)
+
+    promedios = df_radar.groupby(agrupar)[nut_cols].mean()
+
+    nutrientes = list(nutriente_col.keys())
+
+    fig_r = go.Figure()
+
+    opt_min_norm = [FOLIAR_REFERENCE[n]["min"] / FOLIAR_REFERENCE[n]["max"] * 100 for n in nutrientes]
+    opt_max_norm = [100.0 for _ in nutrientes]
+
+    fig_r.add_trace(go.Scatterpolar(
+        r=opt_max_norm + [opt_max_norm[0]],
+        theta=nutrientes + [nutrientes[0]],
+        fill="toself",
+        fillcolor="rgba(46, 200, 80, 0.12)",
+        line=dict(color="rgba(46, 200, 80, 0.5)", width=1, dash="dot"),
+        name="Óptimo superior (100%)"
+    ))
+    fig_r.add_trace(go.Scatterpolar(
+        r=opt_min_norm + [opt_min_norm[0]],
+        theta=nutrientes + [nutrientes[0]],
+        fill="toself",
+        fillcolor="rgba(46, 200, 80, 0.18)",
+        line=dict(color="rgba(46, 200, 80, 0.6)", width=1, dash="dot"),
+        name="Óptimo inferior"
+    ))
+
+    colores_grupo = px.colors.qualitative.Set2
+    for i, grupo in enumerate(grupos_radar):
+        if grupo not in promedios.index:
+            continue
+        valores_norm = []
+        for n in nutrientes:
+            col = nutriente_col[n]
+            val = promedios.loc[grupo, col] if col in promedios.columns else np.nan
+            if pd.isna(val):
+                valores_norm.append(None)
+            else:
+                valores_norm.append(float(val) / FOLIAR_REFERENCE[n]["max"] * 100)
+        valores_norm_closed = valores_norm + [valores_norm[0]]
+        fig_r.add_trace(go.Scatterpolar(
+            r=valores_norm_closed,
+            theta=nutrientes + [nutrientes[0]],
+            fill="toself",
+            line=dict(color=colores_grupo[i % len(colores_grupo)], width=2),
+            opacity=0.75,
+            name=str(grupo)
+        ))
+
+    fig_r.update_layout(
+        polar=dict(
+            radialaxis=dict(
+                range=[0, 150],
+                tickprefix="%",
+                tickvals=[25, 50, 75, 100, 125, 150],
+            ),
+            angularaxis=dict(direction="clockwise", period=len(nutrientes))
+        ),
+        title=f"Perfil foliar por {agrupar} — normalizado a % del óptimo superior",
+        height=600,
+        legend=dict(orientation="h", y=-0.08),
+        template="plotly_white",
+    )
+    st.plotly_chart(fig_r, use_container_width=True, key="fol_radar")
+
+    st.caption(
+        "🟢 Banda verde = rango óptimo (Beltrán/Mancilla, hoja 17). "
+        "Líneas por grupo = promedio normalizado a % del óptimo superior. "
+        "<100% = deficiencia; 100-118% = óptimo; >120% = exceso."
+    )
+
+    st.markdown("---")
+
+def tab_modelo(df, SUELO_COLS=None, FERT_COLS=None, FOLIAR_COLS=None, CLIMA_COLS=None):
+
+    st.markdown(
+        '<div class="section-title">Modelo Predictivo — Random Forest (ton/ha)</div>',
+        unsafe_allow_html=True,
+    )
+
+    target = "ton_ha"
+    if target not in df.columns:
+        st.warning(f"El dataset no contiene la columna '{target}'.")
+        return
+
+    feature_pool = []
+    for lst in (SUELO_COLS, FERT_COLS, FOLIAR_COLS, CLIMA_COLS):
+        if lst:
+            feature_pool.extend(lst)
+    feature_pool = [c for c in dict.fromkeys(feature_pool) if c in df.columns and c != target]
+    if not feature_pool:
+        st.warning("No se encontraron variables predictoras en el dataset (revisa los grupos).")
+        return
+
+    df_model = df[[target] + feature_pool].copy()
+    for c in df_model.columns:
+        df_model[c] = pd.to_numeric(df_model[c], errors="coerce")
+
+    keep = []
+    for c in feature_pool:
+        s = df_model[c]
+        if s.notna().any() and s.dropna().nunique() > 1:
+            keep.append(c)
+    feature_pool = keep
+    if not feature_pool:
+        st.warning("Todas las features estaban vacías o sin varianza.")
+        return
+
+    df_model = df_model.dropna(subset=[target]).reset_index(drop=True)
+    if df_model.empty or len(df_model) < 30:
+        st.warning(f"Registros insuficientes tras limpiar target: {len(df_model)}. Mínimo 30.")
+        return
+
+    y = df_model[target].astype(float)
+    X = df_model[feature_pool].copy()
+
+    leak_patterns = (
+        "_ton", "_per_ton", "_ton_ha", "kgn_ton", "kgp_ton", "kgk_ton",
+        "kgk_ha", "n_per_ton", "k_per_ton", "p_per_ton",
+    )
+    leak_by_name = [c for c in X.columns if any(p in c.lower() for p in leak_patterns)]
+    if leak_by_name:
+        X = X.drop(columns=leak_by_name)
+
+    leak_by_corr = []
+    if not X.empty:
+        for c in X.columns:
+            tmp = pd.concat([X[c], y], axis=1).dropna()
+            if len(tmp) >= 15 and tmp[c].nunique() > 1:
+                r = tmp[c].corr(tmp[y.name])
+                if pd.notna(r) and abs(r) > 0.85:
+                    leak_by_corr.append((c, r))
+        if leak_by_corr:
+            cols_to_drop = [c for c, _ in leak_by_corr]
+            X = X.drop(columns=cols_to_drop)
+            detalle = ", ".join(f"{c} (r={r:+.2f})" for c, r in leak_by_corr)
+            st.info(f"Variables excluidas por alta correlación con target (|r|>0.85): {detalle}")
+
+    if X.empty:
+        st.warning("Todas las features fueron excluidas por leakage. Revisa el dataset.")
+        return
+
+    # Imputación mediana
+    imputer = SimpleImputer(strategy="median")
+    X_imp = pd.DataFrame(imputer.fit_transform(X), columns=X.columns, index=X.index)
+
+    # Hold-out 80/20
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_imp, y, test_size=0.2, random_state=42, shuffle=True
+    )
+
+    # Entrenamiento RF fijo
+    rf = RandomForestRegressor(
+        n_estimators=500,
+        max_depth=12,
+        min_samples_leaf=3,
+        max_features=0.8,
+        random_state=42,
+        n_jobs=-1,
+    )
+    rf.fit(X_train, y_train)
+    y_pred = rf.predict(X_test)
+
+    # Métricas: R2 y RMSE (test)
+    r2 = r2_score(y_test, y_pred)
+
+    imp_desc = pd.DataFrame({"variable": X_imp.columns, "importancia": rf.feature_importances_}).sort_values("importancia", ascending=False)
     top5 = imp_desc["variable"].tolist()[:5]
+
     if top5:
-        umbrales_cols = st.columns(len(top5))
+        cols_top = st.columns(len(top5))
         for i, feat in enumerate(top5):
             vals = df_model[feat].dropna()
-            if len(vals) == 0: continue
+            if len(vals) == 0:
+                cols_top[i].markdown(f"<div style='color:#777'>No hay datos para {feat}</div>", unsafe_allow_html=True)
+                continue
             p25, p50, p75 = vals.quantile([.25, .5, .75])
             low_mask = df_model[feat] <= p25
             high_mask = df_model[feat] >= p75
@@ -2740,29 +2921,41 @@ def tab_modelo(df: pd.DataFrame, SUELO_COLS, FERT_COLS, FOLIAR_COLS):
             mu_high = df_model.loc[high_mask, "ton_ha"].mean()
             delta = mu_high - mu_low
             color = COLORS["success"] if delta > 0 else COLORS["danger"]
-            umbrales_cols[i].markdown(f"""
-                <div class="kpi-card" style="border-left-color:{color};">
-                    <div class="kpi-label">{feat}</div>
-                    <div style="font-size:.8rem;margin-top:.3rem;">
-                        P25 ≤ {p25:.2f}: media <b>{mu_low:.2f} ton/ha</b><br>
-                        P75 ≥ {p75:.2f}: media <b>{mu_high:.2f} ton/ha</b><br>
-                        <span style="color:{color};font-weight:700;">Δ = {delta:+.2f} ton/ha</span>
-                    </div>
-                </div>""", unsafe_allow_html=True)
+            cols_top[i].markdown(f"""
+                <div class="kpi-card" style="border-left:4px solid {color}; padding:8px; border-radius:6px;">
+                  <div style="font-weight:700;">{feat}</div>
+                  <div style="font-size:.85rem; margin-top:.35rem;">
+                    P25 ≤ {p25:.2f}: media <b>{mu_low:.2f} ton/ha</b><br>
+                    P75 ≥ {p75:.2f}: media <b>{mu_high:.2f} ton/ha</b><br>
+                    <span style="color:{color};font-weight:700;">Δ = {delta:+.2f} ton/ha</span>
+                  </div>
+                </div>
+            """, unsafe_allow_html=True)
+
     st.markdown("---")
-    c1, c2 = st.columns(2)
+
+    # Plots: importancia y pred vs real side-by-side
+    c1, c2 = st.columns([1,1.4])
     with c1:
-        imp = pd.DataFrame({"variable": good_feats, "importancia": rf.feature_importances_}).sort_values("importancia", ascending=True).tail(20)
-        fig_imp = px.bar(imp, x="importancia", y="variable", orientation="h", color="importancia", color_continuous_scale="Greens")
+        imp_plot = imp_desc.head(20).sort_values("importancia", ascending=True)
+        fig_imp = px.bar(imp_plot, x="importancia", y="variable", orientation="h", color="importancia", color_continuous_scale="Greens")
         st.plotly_chart(fig_imp, use_container_width=True, key="rf_importance")
+
     with c2:
         fig_pred = go.Figure()
-        fig_pred.add_trace(go.Scatter(x=y, y=y_pred, mode="markers", marker=dict(color=COLORS["primary"], opacity=0.5, size=5), name="Lotes"))
-        lims = [min(y.min(), y_pred.min()), max(y.max(), y_pred.max())]
-        fig_pred.add_trace(go.Scatter(x=lims, y=lims, mode="lines", line=dict(color="red", dash="dash"), name="Ideal"))
-        fig_pred.update_layout(xaxis_title="Real (ton/ha)", yaxis_title="Predicho (ton/ha)", height=520)
+        fig_pred.add_trace(go.Scatter(
+            x=y_test, y=y_pred, mode="markers",
+            marker=dict(color=COLORS["primary"], opacity=0.6, size=6),
+            name="test"
+        ))
+        lim_min = float(min(y_test.min(), np.min(y_pred)))
+        lim_max = float(max(y_test.max(), np.max(y_pred)))
+        fig_pred.add_trace(go.Scatter(x=[lim_min, lim_max], y=[lim_min, lim_max], mode="lines", line=dict(color="red", dash="dash"), name="ideal"))
+        fig_pred.update_layout(title=f"Predicho vs Real — R² = {r2:.3f}", xaxis_title="Real (ton/ha)", yaxis_title="Predicho (ton/ha)", height=520, template="plotly_white")
         st.plotly_chart(fig_pred, use_container_width=True, key="rf_pred_vs_real")
+
     st.markdown("---")
+
 
 # ════════════════════════════════════════════════════
 # 4. SIDEBAR
@@ -2881,7 +3074,14 @@ def main():
 
     st.markdown("---")
 
-    tab_names = ["📌 Resumen","📊 Producción","🗺️ Suelos","🧪 Fertilización","🔬 Foliares", "📈 Climatología","🔲 Cuadrantes","📋 Modelo RF"]
+    tab_names = ["📌 Resumen",
+                 "📊 Producción",
+                 "🗺️ Suelos",
+                 "🧪 Fertilización",
+                 "🔬 Foliares",
+                 "📈 Climatología",
+                 "🔲 Cuadrantes",
+                 "📋 Modelo RF"]
     tabs = st.tabs(tab_names)
 
     with tabs[0]:
@@ -2899,7 +3099,7 @@ def main():
     with tabs[6]:
         tab_cuadrantes(df)
     with tabs[7]:
-        tab_modelo(df,SUELO_COLS, FERT_COLS, FOLIAR_COLS)
+        tab_modelo(df,SUELO_COLS, FERT_COLS, FOLIAR_COLS, CLIMA_COLS)
 
 if __name__ == "__main__":
     main()
