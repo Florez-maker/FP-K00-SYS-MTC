@@ -2658,9 +2658,7 @@ def tab_foliares(df: pd.DataFrame, FOLIAR_COLS):
         fig2 = fig_distplot(df_f[var_fol], var_fol)
         st.plotly_chart(fig2, use_container_width=True, key=sanitize_key(f"fol_dist_{var_fol}"))
 
-    st.markdown("---")
-
-    st.markdown('<div class="section-title">🎻 Distribución por grupo — Violin + Box + puntos</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Distribución por grupo — Violin + Box + puntos</div>', unsafe_allow_html=True)
     df_v = df_f[[agrupar, var_fol]].dropna() if agrupar in df_f.columns else df_f[[var_fol]].dropna().copy()
     if not df_v.empty and agrupar in df_v.columns:
         df_v[agrupar] = df_v[agrupar].astype(str)
@@ -2678,136 +2676,6 @@ def tab_foliares(df: pd.DataFrame, FOLIAR_COLS):
         st.plotly_chart(fig_v, use_container_width=True, key="fol_violin")
     else:
         st.info("Sin datos suficientes para el violin.")
-
-    st.markdown('<div class="section-title">🎯 Perfil foliar por grupo vs rangos óptimos (Radar)</div>', unsafe_allow_html=True)
-
-    FOLIAR_REFERENCE = {
-        "N":   {"min": 2.50, "max": 2.90, "patrones": ["n_f", "nitrogeno_f", "n_foliar", "nitrogeno"]},
-        "P":   {"min": 0.15, "max": 0.18, "patrones": ["p_f", "fosforo_f", "p_foliar", "fosforo"]},
-        "K":   {"min": 1.00, "max": 1.40, "patrones": ["k_f", "potasio_f", "k_foliar", "potasio"]},
-        "Ca":  {"min": 0.50, "max": 0.70, "patrones": ["ca_f", "calcio_f", "ca_foliar", "calcio"]},
-        "Mg":  {"min": 0.25, "max": 0.35, "patrones": ["mg_f", "magnesio_f", "mg_foliar", "magnesio"]},
-        "S":   {"min": 0.25, "max": 0.30, "patrones": ["s_f", "azufre_f", "s_foliar", "azufre"]},
-        "B":   {"min": 18.0, "max": 25.0, "patrones": ["b_f", "boro_f", "b_foliar", "boro"]},
-        "Cu":  {"min": 5.0,  "max": 8.0,  "patrones": ["cu_f", "cobre_f", "cu_foliar", "cobre"]},
-        "Zn":  {"min": 15.0, "max": 25.0, "patrones": ["zn_f", "zinc_f", "zn_foliar", "zinc"]},
-        "Mn":  {"min": 25.0, "max": 60.0, "patrones": ["mn_f", "manganeso_f", "mn_foliar", "manganeso"]},
-        "Fe":  {"min": 50.0, "max": 100.0,"patrones": ["fe_f", "hierro_f", "fe_foliar", "hierro"]},
-    }
-
-    nutriente_col = {}
-    for nut, info in FOLIAR_REFERENCE.items():
-        matched = None
-        for c in avail_fol:
-            if c.lower() == f"{nut.lower()}_f":
-                matched = c
-                break
-        if matched is None:
-            for c in avail_fol:
-                for pat in info["patrones"]:
-                    if c.lower() == pat.lower():
-                        matched = c
-                        break
-                if matched:
-                    break
-        if matched:
-            nutriente_col[nut] = matched
-
-    if len(nutriente_col) < 3:
-        st.info(
-            f"Se necesitan al menos 3 nutrientes con datos para construir el radar. "
-            f"Detectados: {list(nutriente_col.keys()) or 'ninguno'}. "
-            f"Revisa que existan columnas tipo n_f, p_f, k_f, ... en FOLIAR_COLS."
-        )
-        st.markdown("---")
-        return
-
-    nut_cols = list(nutriente_col.values())
-    if agrupar not in df_f.columns:
-        st.info(f"Columna '{agrupar}' no encontrada en el dataset para el radar.")
-        st.markdown("---")
-        return
-
-    df_radar = df_f[[agrupar] + nut_cols].copy()
-    df_radar = df_radar.dropna(how="all", subset=nut_cols)
-    if df_radar.empty:
-        st.info("Sin datos suficientes para construir el radar.")
-        st.markdown("---")
-        return
-
-    grupos_radar = df_radar[agrupar].value_counts().head(5).index.tolist()
-    df_radar = df_radar[df_radar[agrupar].isin(grupos_radar)]
-    df_radar[agrupar] = df_radar[agrupar].astype(str)
-
-    promedios = df_radar.groupby(agrupar)[nut_cols].mean()
-
-    nutrientes = list(nutriente_col.keys())
-
-    fig_r = go.Figure()
-
-    opt_min_norm = [FOLIAR_REFERENCE[n]["min"] / FOLIAR_REFERENCE[n]["max"] * 100 for n in nutrientes]
-    opt_max_norm = [100.0 for _ in nutrientes]
-
-    fig_r.add_trace(go.Scatterpolar(
-        r=opt_max_norm + [opt_max_norm[0]],
-        theta=nutrientes + [nutrientes[0]],
-        fill="toself",
-        fillcolor="rgba(46, 200, 80, 0.12)",
-        line=dict(color="rgba(46, 200, 80, 0.5)", width=1, dash="dot"),
-        name="Óptimo superior (100%)"
-    ))
-    fig_r.add_trace(go.Scatterpolar(
-        r=opt_min_norm + [opt_min_norm[0]],
-        theta=nutrientes + [nutrientes[0]],
-        fill="toself",
-        fillcolor="rgba(46, 200, 80, 0.18)",
-        line=dict(color="rgba(46, 200, 80, 0.6)", width=1, dash="dot"),
-        name="Óptimo inferior"
-    ))
-
-    colores_grupo = px.colors.qualitative.Set2
-    for i, grupo in enumerate(grupos_radar):
-        if grupo not in promedios.index:
-            continue
-        valores_norm = []
-        for n in nutrientes:
-            col = nutriente_col[n]
-            val = promedios.loc[grupo, col] if col in promedios.columns else np.nan
-            if pd.isna(val):
-                valores_norm.append(None)
-            else:
-                valores_norm.append(float(val) / FOLIAR_REFERENCE[n]["max"] * 100)
-        valores_norm_closed = valores_norm + [valores_norm[0]]
-        fig_r.add_trace(go.Scatterpolar(
-            r=valores_norm_closed,
-            theta=nutrientes + [nutrientes[0]],
-            fill="toself",
-            line=dict(color=colores_grupo[i % len(colores_grupo)], width=2),
-            opacity=0.75,
-            name=str(grupo)
-        ))
-
-    fig_r.update_layout(
-        polar=dict(
-            radialaxis=dict(
-                range=[0, 150],
-                tickprefix="%",
-                tickvals=[25, 50, 75, 100, 125, 150],
-            ),
-            angularaxis=dict(direction="clockwise", period=len(nutrientes))
-        ),
-        title=f"Perfil foliar por {agrupar} — normalizado a % del óptimo superior",
-        height=600,
-        legend=dict(orientation="h", y=-0.08),
-        template="plotly_white",
-    )
-    st.plotly_chart(fig_r, use_container_width=True, key="fol_radar")
-
-    st.caption(
-        "🟢 Banda verde = rango óptimo (Beltrán/Mancilla, hoja 17). "
-        "Líneas por grupo = promedio normalizado a % del óptimo superior. "
-        "<100% = deficiencia; 100-118% = óptimo; >120% = exceso."
-    )
 
     st.markdown("---")
 
@@ -2998,9 +2866,11 @@ def render_sidebar():
 
     return uploaded
 
+
 # ════════════════════════════════════════════════════
 # 5. MAIN
 # ════════════════════════════════════════════════════
+
 
 def main():
     uploaded = render_sidebar()
