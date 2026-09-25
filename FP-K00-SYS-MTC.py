@@ -1841,6 +1841,10 @@ def make_bar_table_pie(df_corr: pd.DataFrame, value_label: str):
 # TAB RESUMEN
 # ─────────────────────────────────────────────────────────────────────────────
 
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB RESUMEN
+# ─────────────────────────────────────────────────────────────────────────────
+
 def tab_resumen(df: pd.DataFrame):
     st.markdown(
         '<div class="section-title">🔗 Correlación con ton/ha</div>',
@@ -2013,7 +2017,7 @@ def tab_resumen(df: pd.DataFrame):
 
     st.plotly_chart(
         fig_corr,
-        use_container_width=True,
+        width="stretch",
         key=sanitize_key("resumen_corr_heatmap"),
     )
 
@@ -2080,21 +2084,21 @@ def tab_resumen(df: pd.DataFrame):
     with col_bar:
         st.plotly_chart(
             fig_bar,
-            use_container_width=True,
+            width="stretch",
             key=sanitize_key("resumen_corr_bar"),
         )
 
     with col_table:
         st.plotly_chart(
             fig_table,
-            use_container_width=True,
+            width="stretch",
             key=sanitize_key("resumen_corr_table"),
         )
 
     with col_pie:
         st.plotly_chart(
             fig_pie,
-            use_container_width=True,
+            width="stretch",
             key=sanitize_key("resumen_corr_pie"),
         )
 
@@ -2112,10 +2116,10 @@ def tab_produccion(df: pd.DataFrame):
     c1, c2 = st.columns(2)
     with c1:
         fig = fig_boxplot(df, agrupar, "ton_ha", f"{"ton_ha"} por {agrupar}", global_mean=df["ton_ha"].mean() if "ton_ha" in df.columns else None)
-        st.plotly_chart(fig, use_container_width=True, key=sanitize_key(f"prod_box_{"ton_ha"}_{agrupar}"))
+        st.plotly_chart(fig, width="stretch", key=sanitize_key(f"prod_box_{"ton_ha"}_{agrupar}"))
     with c2:
         fig2 = fig_distplot(df["ton_ha"], "ton_ha")
-        st.plotly_chart(fig2, use_container_width=True, key=sanitize_key(f"prod_dist_{"ton_ha"}"))
+        st.plotly_chart(fig2, width="stretch", key=sanitize_key(f"prod_dist_{"ton_ha"}"))
     st.markdown('<div class="section-title"> Mapas de árbol o jerárquico</div>',
                 unsafe_allow_html=True)
     if "departamento" in df.columns and "finca" in df.columns:
@@ -2141,7 +2145,7 @@ def tab_produccion(df: pd.DataFrame):
             fig_tree.update_traces(hovertemplate="%{label}<br>%{value:.2f}")
             fig_tree.update_layout(height=320, template="plotly_white", margin=dict(t=10, l=0, r=0, b=0),
                                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig_tree, use_container_width=True, key="prod_treemap")
+            st.plotly_chart(fig_tree, width="stretch", key="prod_treemap")
     st.markdown("---")
 
 def tab_suelos(df: pd.DataFrame, SUELO_COLS):
@@ -2157,10 +2161,10 @@ def tab_suelos(df: pd.DataFrame, SUELO_COLS):
     c1, c2 = st.columns(2)
     with c1:
         fig = fig_boxplot(df, agrupar, var, f"{var} por {agrupar}", global_mean=df[var].mean() if var in df.columns else None)
-        st.plotly_chart(fig, use_container_width=True, key=sanitize_key(f"suelo_box_{var}_{agrupar}"))
+        st.plotly_chart(fig, width="stretch", key=sanitize_key(f"suelo_box_{var}_{agrupar}"))
     with c2:
         fig2 = fig_distplot(df[var], var)
-        st.plotly_chart(fig2, use_container_width=True, key=sanitize_key(f"suelo_dist_{var}"))
+        st.plotly_chart(fig2, width="stretch", key=sanitize_key(f"suelo_dist_{var}"))
     st.markdown("---")
 
 def tab_fertilizacion(df: pd.DataFrame, FERT_COLS):
@@ -2223,7 +2227,7 @@ def tab_fertilizacion(df: pd.DataFrame, FERT_COLS):
         )
         st.plotly_chart(
             fig,
-            use_container_width=True,
+            width="stretch",
             key=sanitize_key(f"fert_box_{nut_sel}_{agrupar}"),
         )
 
@@ -2231,7 +2235,7 @@ def tab_fertilizacion(df: pd.DataFrame, FERT_COLS):
         fig2 = fig_distplot(df[nut_sel], nut_map[nut_sel])
         st.plotly_chart(
             fig2,
-            use_container_width=True,
+            width="stretch",
             key=sanitize_key(f"fert_dist_{nut_sel}"),
         )
 
@@ -2264,7 +2268,7 @@ def tab_fertilizacion(df: pd.DataFrame, FERT_COLS):
     )
     st.plotly_chart(
         fig_stack,
-        use_container_width=True,
+        width="stretch",
         key=sanitize_key(f"fert_stacked_{agrupar}"),
     )
 
@@ -2356,7 +2360,7 @@ def tab_clima(df: pd.DataFrame, CLIMA_COLS):
             )
             st.plotly_chart(
                 fig_box,
-                use_container_width=True,
+                width="stretch",
                 key=sanitize_key(f"clima_box_{var}_{agrupar}"),
             )
         else:
@@ -2366,7 +2370,7 @@ def tab_clima(df: pd.DataFrame, CLIMA_COLS):
         fig_dist = fig_distplot(df_clima[var], var)
         st.plotly_chart(
             fig_dist,
-            use_container_width=True,
+            width="stretch",
             key=sanitize_key(f"clima_dist_{var}"),
         )
 
@@ -2383,7 +2387,7 @@ def tab_clima(df: pd.DataFrame, CLIMA_COLS):
 
     st.plotly_chart(
         fig_serie,
-        use_container_width=True,
+        width="stretch",
         key=sanitize_key(f"clima_serie_anual_{var}"),
     )
 
@@ -2452,7 +2456,7 @@ def tab_cuadrantes(df: pd.DataFrame):
     )
     st.plotly_chart(
         fig_q,
-        use_container_width=True,
+        width="stretch",
         key=sanitize_key(f"cuadrantes_scatter_{modo_q}_{group_q}"),
     )
 
@@ -2465,6 +2469,10 @@ def tab_cuadrantes(df: pd.DataFrame):
             real = _find_soil_var(df.columns, c)
             if real and pd.api.types.is_numeric_dtype(df[real]):
                 avail.append(real)
+        # FIX DuplicateError: el fallback de subcadena de _find_soil_var puede
+        # resolver dos variables distintas ('ce'→'cea', 'cic'→'cice') a la misma
+        # columna real, generando columnas duplicadas que px.imshow no acepta.
+        avail = list(dict.fromkeys(avail))
         if avail:
             grupos_reales[gname] = avail
 
@@ -2480,7 +2488,7 @@ def tab_cuadrantes(df: pd.DataFrame):
         ).round(2).reset_index()
         st.dataframe(
             resumen_solo,
-            use_container_width=True,
+            width="stretch",
             key="cuadrantes_resumen_solo",
         )
         return
@@ -2565,7 +2573,7 @@ def tab_cuadrantes(df: pd.DataFrame):
         )
         st.plotly_chart(
             fig_resumen,
-            use_container_width=True,
+            width="stretch",
             key=sanitize_key(f"cuadrantes_resumen_table_{modo_q}_{group_q}"),
         )
 
@@ -2594,6 +2602,8 @@ def tab_cuadrantes(df: pd.DataFrame):
         how="left",
     )
     perfil = df_merged.groupby(q_col)[soil_vars].mean().round(3)
+    # FIX defensivo: garantiza columnas únicas antes de px.imshow
+    perfil = perfil.loc[:, ~perfil.columns.duplicated()].copy()
 
     if perfil.empty or perfil.shape[1] == 0:
         st.info(
@@ -2621,7 +2631,7 @@ def tab_cuadrantes(df: pd.DataFrame):
     )
     st.plotly_chart(
         fig_perf,
-        use_container_width=True,
+        width="stretch",
         key=sanitize_key(
             f"cuadrantes_perfil_{modo_q}_{group_q}_{selected_block}"
         ),
@@ -2653,10 +2663,10 @@ def tab_foliares(df: pd.DataFrame, FOLIAR_COLS):
     c1, c2 = st.columns(2)
     with c1:
         fig = fig_boxplot(df_f, agrupar, var_fol, "", global_mean=df_f[var_fol].mean() if var_fol in df_f.columns else None)
-        st.plotly_chart(fig, use_container_width=True, key=sanitize_key(f"fol_box_{var_fol}"))
+        st.plotly_chart(fig, width="stretch", key=sanitize_key(f"fol_box_{var_fol}"))
     with c2:
         fig2 = fig_distplot(df_f[var_fol], var_fol)
-        st.plotly_chart(fig2, use_container_width=True, key=sanitize_key(f"fol_dist_{var_fol}"))
+        st.plotly_chart(fig2, width="stretch", key=sanitize_key(f"fol_dist_{var_fol}"))
 
     st.markdown('<div class="section-title">Distribución por grupo — Violin + Box + puntos</div>', unsafe_allow_html=True)
     df_v = df_f[[agrupar, var_fol]].dropna() if agrupar in df_f.columns else df_f[[var_fol]].dropna().copy()
@@ -2673,7 +2683,7 @@ def tab_foliares(df: pd.DataFrame, FOLIAR_COLS):
             xaxis_title=agrupar, yaxis_title=var_fol,
             showlegend=False, height=480, template="plotly_white",
         )
-        st.plotly_chart(fig_v, use_container_width=True, key="fol_violin")
+        st.plotly_chart(fig_v, width="stretch", key="fol_violin")
     else:
         st.info("Sin datos suficientes para el violin.")
 
@@ -2703,6 +2713,9 @@ def tab_modelo(df, SUELO_COLS=None, FERT_COLS=None, FOLIAR_COLS=None, CLIMA_COLS
     df_model = df[[target] + feature_pool].copy()
     for c in df_model.columns:
         df_model[c] = pd.to_numeric(df_model[c], errors="coerce")
+    # FIX SimpleImputer: ±inf (de razones y divisiones por cero) no es un valor
+    # finito; se normaliza a NaN para que la mediana lo impute.
+    df_model = df_model.replace([np.inf, -np.inf], np.nan)
 
     keep = []
     for c in feature_pool:
@@ -2721,6 +2734,10 @@ def tab_modelo(df, SUELO_COLS=None, FERT_COLS=None, FOLIAR_COLS=None, CLIMA_COLS
 
     y = df_model[target].astype(float)
     X = df_model[feature_pool].copy()
+    # Limpieza defensiva: inf residual → NaN y descarte de columnas 100% vacías
+    # (columnas que pierden sus únicos valores no nulos tras el dropna del target
+    # desalinean la salida del imputer respecto de X.columns)
+    X = X.replace([np.inf, -np.inf], np.nan).dropna(axis=1, how="all")
 
     leak_patterns = (
         "_ton", "_per_ton", "_ton_ha", "kgn_ton", "kgp_ton", "kgk_ton",
@@ -2807,7 +2824,7 @@ def tab_modelo(df, SUELO_COLS=None, FERT_COLS=None, FOLIAR_COLS=None, CLIMA_COLS
     with c1:
         imp_plot = imp_desc.head(20).sort_values("importancia", ascending=True)
         fig_imp = px.bar(imp_plot, x="importancia", y="variable", orientation="h", color="importancia", color_continuous_scale="Greens")
-        st.plotly_chart(fig_imp, use_container_width=True, key="rf_importance")
+        st.plotly_chart(fig_imp, width="stretch", key="rf_importance")
 
     with c2:
         fig_pred = go.Figure()
@@ -2820,10 +2837,9 @@ def tab_modelo(df, SUELO_COLS=None, FERT_COLS=None, FOLIAR_COLS=None, CLIMA_COLS
         lim_max = float(max(y_test.max(), np.max(y_pred)))
         fig_pred.add_trace(go.Scatter(x=[lim_min, lim_max], y=[lim_min, lim_max], mode="lines", line=dict(color="red", dash="dash"), name="ideal"))
         fig_pred.update_layout(title=f"Predicho vs Real — R² = {r2:.3f}", xaxis_title="Real (ton/ha)", yaxis_title="Predicho (ton/ha)", height=520, template="plotly_white")
-        st.plotly_chart(fig_pred, use_container_width=True, key="rf_pred_vs_real")
+        st.plotly_chart(fig_pred, width="stretch", key="rf_pred_vs_real")
 
     st.markdown("---")
-
 
 # ════════════════════════════════════════════════════
 # 4. SIDEBAR
